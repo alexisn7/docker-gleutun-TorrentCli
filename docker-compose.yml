@@ -43,7 +43,7 @@ services:
       VPN_PORT_FORWARDING: ${VPN_PORT_FORWARDING}
       PORT_FORWARD_ONLY: ${PORT_FORWARD_ONLY}
     volumes:
-      - ${CONFIG_PATH}:/gluetun
+      - ${CONFIG_PATH}/gluetun:/gluetun
     restart: unless-stopped
 
   ######################################################################
@@ -69,6 +69,6 @@ services:
       TRANSMISSION_PASSWORD: ${TRANSMISSION_PASSWORD}
     volumes:
       - ${CONFIG_PATH}/transmission:/config
-      - ${DOWNLOADS_PATH}:/downloads
-      - ${WATCHED_PATH}:/watched
+      - ${MEDIA_DIR}:/downloads
+      - ${MEDIA_DIR}/watched:/watched
     restart: unless-stopped

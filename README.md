@@ -14,12 +14,14 @@ This project provides a ready-to-use Docker Compose stack for running Transmissi
 ## Quick Start
 
 1. Copy the example environment file:
+
  ```sh
  cp .env.example .env
  ```
 
 2. Edit `.env` with your VPN credentials and preferences.
 3. Start the stack:
+
  ```sh
  docker-compose up -d
  ```

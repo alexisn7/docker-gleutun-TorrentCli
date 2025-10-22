@@ -1,0 +1,12 @@
+# Authentication for Gluetun's control server
+[[roles]]
+name = "transmission"
+routes = [
+    "GET /v1/vpn/status",
+    "GET /v1/publicip/ip",
+    "GET /v1/openvpn/portforwarded",
+]
+
+auth = "apikey"
+# generated apikey run command: docker run --rm qmcgaw/gluetun genkey
+apikey = "AQBMs2hvVShFgudeP7QMBg"

@@ -28,6 +28,7 @@ services:
       - /dev/net/tun:/dev/net/tun # TUN device required for VPN tunnel
     ports:
       - 9091:9091/tcp # Exposes Transmission Web UI (via VPN)
+      - 8000:8000/tcp # Exposes Gluetun Control server
     env_file:
       - .env # Loads environment variables from .env file
     environment:
@@ -44,6 +45,7 @@ services:
       PORT_FORWARD_ONLY: ${PORT_FORWARD_ONLY}
     volumes:
       - ${CONFIG_PATH}/gluetun:/gluetun
+      - ./auth:/gluetun/auth
     restart: unless-stopped
 
   ######################################################################
@@ -65,10 +67,12 @@ services:
       PUID: ${PUID}
       PGID: ${PGID}
       DOCKER_MODS: ${DOCKER_MODS}
+      GLUETUN_AUTH_TYPE: ${GLUETUN_AUTH_TYPE}
+      GLUETUN_AUTH_API_KEY: ${GLUETUN_AUTH_API_KEY}
       TRANSMISSION_USER: ${TRANSMISSION_USER}
       TRANSMISSION_PASSWORD: ${TRANSMISSION_PASSWORD}
     volumes:
       - ${CONFIG_PATH}/transmission:/config
       - ${MEDIA_DIR}:/downloads
-      - ${MEDIA_DIR}/watched:/watched
+      - ${MEDIA_DIR}/watch:/watch
     restart: unless-stopped

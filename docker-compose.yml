@@ -1,42 +1,32 @@
 ######################################################################
-# 🧱 Docker Compose — Gluetun VPN + Transmission + Radarr + Sonarr + Prowlarr
+# 🧱 Docker Compose — Gluetun VPN + qBittorrent
 #
 # ▶️ This stack routes all BitTorrent traffic through Gluetun VPN (ProtonVPN,
-#    WireGuard, or OpenVPN). Transmission, Radarr, Sonarr, and Prowlarr all
-#    share the same /downloads path to avoid Remote Path Mapping issues.
+#    WireGuard, or OpenVPN).
 #
-# ⚙️  Usage:
-#     - Define variables in .env (VPN credentials, media paths, etc.)
-#     - Run: docker-compose up -d
-#     - Access UIs:
-#         • Transmission → http://localhost:9091
-#         • Radarr → http://localhost:7878
-#         • Sonarr → http://localhost:8989
-#         • Prowlarr → http://localhost:9696
+# ⚙️ Usage:
+#   - Fill your .env file with VPN credentials and media paths.
+#   - Run: docker-compose up -d
+#   - Access UIs:
+#       • qBittorrent → http://localhost:65534
 ######################################################################
-services:
 
+services:
   ######################################################################
   # 🛡️ GLUETUN — VPN container
-  #
   # Provides a secure VPN tunnel (ProtonVPN, Mullvad, etc.).
-  # All other containers use its network stack (via "service:gluetun")
-  # so their traffic is routed securely through the VPN.
   ######################################################################
   gluetun:
     image: qmcgaw/gluetun:v3
     container_name: gluetun
     network_mode: bridge
     cap_add:
-      - NET_ADMIN                     # required for network routing changes
+      - NET_ADMIN
     devices:
-      - /dev/net/tun:/dev/net/tun     # required TUN device for VPN tunnel
+      - /dev/net/tun:/dev/net/tun
     ports:
-      - 9091:9091                     # Transmission Web UI
-      - 8000:8000                     # Gluetun control server
-      - 9696:9696                     # Prowlarr Web UI
-      - 7878:7878                     # Radarr Web UI
-      - 8989:8989                     # Sonarr Web UI
+      - ${WEBUI_PORT}:${WEBUI_PORT}/tcp 
+      - 8000:8000                     
     env_file:
       - .env
     environment:
@@ -57,14 +47,11 @@ services:
     restart: unless-stopped
 
   ######################################################################
-  # 🧲 TRANSMISSION — BitTorrent client
-  #
-  # Runs inside Gluetun’s network stack (VPN-protected).
-  # Downloads are stored under /downloads (shared with Radarr/Sonarr).
+  # 🧲 QBITTORRENT — BitTorrent client (optionally with VueTorrent UI)
   ######################################################################
-  transmission:
-    image: lscr.io/linuxserver/transmission:latest
-    container_name: transmission
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
     network_mode: "service:gluetun"
     depends_on:
       gluetun:
@@ -75,26 +62,21 @@ services:
       TZ: ${TZ}
       PUID: ${PUID}
       PGID: ${PGID}
-      DOCKER_MODS: linuxserver/mods:transmission-floodui|linuxserver/mods:transmission-env-var-settings|michaukrieg/docker-mods:transmission-gluetun-port-update
-      GLUETUN_AUTH_TYPE: ${GLUETUN_AUTH_TYPE}
-      GLUETUN_AUTH_API_KEY: ${GLUETUN_AUTH_API_KEY}
-      TRANSMISSION_USER: ${TRANSMISSION_USER}
-      TRANSMISSION_PASSWORD: ${TRANSMISSION_PASSWORD}
+      WEBUI_PORT: ${WEBUI_PORT} 
+      DOCKER_MODS: ghcr.io/vuetorrent/vuetorrent-lsio-mod:latest # Optional: modern VueTorrent UI
     volumes:
-      - ${CONFIG_PATH}/transmission:/config
-      - ${MEDIA_DIR}/downloads:/downloads   # ✅ shared with Radarr/Sonarr
-      - ${MEDIA_DIR}/watch:/watch
+      - ${CONFIG_PATH}/qbittorrent:/config
+      - ${MEDIA_DIR}/downloads:/downloads
     restart: unless-stopped
 
   ######################################################################
-  # 🦅 PROWLARR — Indexer manager
-  #
-  # Centralizes torrent indexers for Radarr/Sonarr.
-  # Shares the same /downloads directory (useful for manual imports).
+  # 🔀 PORT FORWARDING HELPER — Build local image & update and keep qBittorrent port open
   ######################################################################
-  prowlarr:
-    image: ghcr.io/almottier/prowlarr-ygg
-    container_name: prowlarr
+  qbittorrent-port-forward-gluetun-server:
+    build:
+      context: ./qbittorrent-port-forward-gluetun-server   
+      dockerfile: Dockerfile                               
+    container_name: qbittorrent-port-forward-gluetun-server
     network_mode: "service:gluetun"
     depends_on:
       gluetun:
@@ -102,60 +84,9 @@ services:
     env_file:
       - .env
     environment:
-      TZ: ${TZ}
-      PUID: ${PUID}
-      PGID: ${PGID}
-    volumes:
-      - ${CONFIG_PATH}/prowlarr:/config
-      - ${MEDIA_DIR}/downloads:/downloads   # ✅ unified path
-    restart: unless-stopped
-
-  ######################################################################
-  # 🎬 RADARR — Movie manager
-  #
-  # Monitors and imports completed movie downloads from Transmission.
-  # Shares the exact same /downloads path as Transmission.
-  ######################################################################
-  radarr:
-    image: lscr.io/linuxserver/radarr:latest
-    container_name: radarr
-    network_mode: "service:gluetun"
-    depends_on:
-      gluetun:
-        condition: service_healthy
-    env_file:
-      - .env
-    environment:
-      TZ: ${TZ}
-      PUID: ${PUID}
-      PGID: ${PGID}
-    volumes:
-      - ${CONFIG_PATH}/radarr:/config
-      - ${MEDIA_DIR}/movies:/movies
-      - ${MEDIA_DIR}/downloads:/downloads   # ✅ same volume path as Transmission
-    restart: unless-stopped
-
-  ######################################################################
-  # 📺 SONARR — TV show manager
-  #
-  # Monitors and imports completed TV show downloads.
-  # Also shares the /downloads path for proper import.
-  ######################################################################
-  sonarr:
-    image: lscr.io/linuxserver/sonarr:latest
-    container_name: sonarr
-    network_mode: "service:gluetun"
-    depends_on:
-      gluetun:
-        condition: service_healthy
-    env_file:
-      - .env
-    environment:
-      TZ: ${TZ}
-      PUID: ${PUID}
-      PGID: ${PGID}
-    volumes:
-      - ${CONFIG_PATH}/sonarr:/config
-      - ${MEDIA_DIR}/tv:/tv
-      - ${MEDIA_DIR}/downloads:/downloads   # ✅ identical mapping
+      QBT_USERNAME: ${QBT_USERNAME}
+      QBT_PASSWORD: ${QBT_PASSWORD}
+      QBT_ADDR: http://127.0.0.1:${WEBUI_PORT}
+      GTN_ADDR: http://127.0.0.1:8000
+      GTN_APIKEY: ${GLUETUN_AUTH_API_KEY}
     restart: unless-stopped

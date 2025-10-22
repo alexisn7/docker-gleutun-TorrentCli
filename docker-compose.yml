@@ -1,39 +1,44 @@
-
 ######################################################################
-# Docker Compose for Gluetun VPN + Transmission BitTorrent Client
+# 🧱 Docker Compose — Gluetun VPN + Transmission + Radarr + Sonarr + Prowlarr
 #
-# This stack securely routes Transmission traffic through a VPN (Gluetun)
-# supporting ProtonVPN and other providers, with WireGuard or OpenVPN.
-# Transmission runs inside the VPN container's network for privacy and port forwarding.
+# ▶️ This stack routes all BitTorrent traffic through Gluetun VPN (ProtonVPN,
+#    WireGuard, or OpenVPN). Transmission, Radarr, Sonarr, and Prowlarr all
+#    share the same /downloads path to avoid Remote Path Mapping issues.
 #
-# Usage:
-#  - Configure .env file with your VPN credentials and paths
-#  - Start with: docker-compose up -d
-#  - Access Transmission Web UI at http://localhost:9091
-#
-# For more info, see:
+# ⚙️  Usage:
+#     - Define variables in .env (VPN credentials, media paths, etc.)
+#     - Run: docker-compose up -d
+#     - Access UIs:
+#         • Transmission → http://localhost:9091
+#         • Radarr → http://localhost:7878
+#         • Sonarr → http://localhost:8989
+#         • Prowlarr → http://localhost:9696
+######################################################################
 services:
+
   ######################################################################
-  # 🛡️ GLUETUN — VPN CONTAINER (ProtonVPN, WireGuard or OpenVPN)
-  # Routes all traffic of connected services (Transmission, etc.)
-  # Handles all VPN connectivity and port forwarding for Transmission
+  # 🛡️ GLUETUN — VPN container
+  #
+  # Provides a secure VPN tunnel (ProtonVPN, Mullvad, etc.).
+  # All other containers use its network stack (via "service:gluetun")
+  # so their traffic is routed securely through the VPN.
   ######################################################################
   gluetun:
     image: qmcgaw/gluetun:v3
     container_name: gluetun
-    network_mode: bridge # Standard Docker bridge network
+    network_mode: bridge
     cap_add:
-      - NET_ADMIN # Required for VPN networking (allows routing changes)
+      - NET_ADMIN                     # required for network routing changes
     devices:
-      - /dev/net/tun:/dev/net/tun # TUN device required for VPN tunnel
+      - /dev/net/tun:/dev/net/tun     # required TUN device for VPN tunnel
     ports:
-      - 9091:9091 # Exposes Transmission Web UI (via VPN)
-      - 8000:8000 # Exposes Gluetun Control server
-      - 9696:9696 # Exposes Prowlarr Web UI
-      - 7878:7878 # Exposes Radarr Web UI
-      - 8989:8989 # Exposes Sonarr Web UI
+      - 9091:9091                     # Transmission Web UI
+      - 8000:8000                     # Gluetun control server
+      - 9696:9696                     # Prowlarr Web UI
+      - 7878:7878                     # Radarr Web UI
+      - 8989:8989                     # Sonarr Web UI
     env_file:
-      - .env # Loads environment variables from .env file
+      - .env
     environment:
       TZ: ${TZ}
       UPDATER_PERIOD: ${UPDATER_PERIOD}
@@ -52,9 +57,10 @@ services:
     restart: unless-stopped
 
   ######################################################################
-  # 🧲 TRANSMISSION — BitTorrent Client (Flood Web UI)
-  # Runs inside Gluetun’s VPN network stack (network_mode: service:gluetun)
-  # Runs inside Gluetun’s VPN network for privacy and port forwarding
+  # 🧲 TRANSMISSION — BitTorrent client
+  #
+  # Runs inside Gluetun’s network stack (VPN-protected).
+  # Downloads are stored under /downloads (shared with Radarr/Sonarr).
   ######################################################################
   transmission:
     image: lscr.io/linuxserver/transmission:latest
@@ -76,18 +82,19 @@ services:
       TRANSMISSION_PASSWORD: ${TRANSMISSION_PASSWORD}
     volumes:
       - ${CONFIG_PATH}/transmission:/config
-      - ${MEDIA_DIR}/downloads:/downloads
+      - ${MEDIA_DIR}/downloads:/downloads   # ✅ shared with Radarr/Sonarr
       - ${MEDIA_DIR}/watch:/watch
     restart: unless-stopped
 
   ######################################################################
-  # 🦅 PROWLARR — Indexer Manager for Torrent Trackers
-  # Manages torrent indexers and integrates with Transmission
-  # Runs inside Gluetun’s VPN network for privacy and port forwarding
+  # 🦅 PROWLARR — Indexer manager
+  #
+  # Centralizes torrent indexers for Radarr/Sonarr.
+  # Shares the same /downloads directory (useful for manual imports).
   ######################################################################
   prowlarr:
-    container_name: prowlarr
     image: ghcr.io/almottier/prowlarr-ygg
+    container_name: prowlarr
     network_mode: "service:gluetun"
     depends_on:
       gluetun:
@@ -100,9 +107,15 @@ services:
       PGID: ${PGID}
     volumes:
       - ${CONFIG_PATH}/prowlarr:/config
+      - ${MEDIA_DIR}/downloads:/downloads   # ✅ unified path
     restart: unless-stopped
 
-  
+  ######################################################################
+  # 🎬 RADARR — Movie manager
+  #
+  # Monitors and imports completed movie downloads from Transmission.
+  # Shares the exact same /downloads path as Transmission.
+  ######################################################################
   radarr:
     image: lscr.io/linuxserver/radarr:latest
     container_name: radarr
@@ -118,11 +131,16 @@ services:
       PGID: ${PGID}
     volumes:
       - ${CONFIG_PATH}/radarr:/config
-      - ${MEDIA_DIR}/movies:/movies 
-      - ${MEDIA_DIR}/downloads:/downloads
+      - ${MEDIA_DIR}/movies:/movies
+      - ${MEDIA_DIR}/downloads:/downloads   # ✅ same volume path as Transmission
     restart: unless-stopped
 
-
+  ######################################################################
+  # 📺 SONARR — TV show manager
+  #
+  # Monitors and imports completed TV show downloads.
+  # Also shares the /downloads path for proper import.
+  ######################################################################
   sonarr:
     image: lscr.io/linuxserver/sonarr:latest
     container_name: sonarr
@@ -139,5 +157,5 @@ services:
     volumes:
       - ${CONFIG_PATH}/sonarr:/config
       - ${MEDIA_DIR}/tv:/tv
-      - ${MEDIA_DIR}/downloads:/downloads
+      - ${MEDIA_DIR}/downloads:/downloads   # ✅ identical mapping
     restart: unless-stopped

@@ -18,7 +18,7 @@ services:
   # Provides a secure VPN tunnel (ProtonVPN, Mullvad, etc.).
   ######################################################################
   gluetun:
-    image: qmcgaw/gluetun:pr-2586
+    image: qmcgaw/gluetun:latest
     container_name: gluetun
     network_mode: bridge
     cap_add:

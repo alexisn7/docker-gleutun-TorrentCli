@@ -15,7 +15,7 @@ This project provides a ready-to-use Docker Compose stack for running BitTorrent
 
 - [Gluetun Wiki](https://github.com/qdm12/gluetun-wiki)
 - [LinuxServer Transmission](https://github.com/linuxserver/docker-transmission)
-- [LinuxServer Qbittorrent](https://github.com/linuxserver/docker-qbittorent)
+- [LinuxServer Qbittorrent](https://github.com/linuxserver/docker-qbittorrent)
 
 ---
 MIT License

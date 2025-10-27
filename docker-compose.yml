@@ -1,23 +1,24 @@
 ######################################################################
 # 🧱 Docker Compose — Gluetun VPN + qBittorrent
 #
-# ▶️ This stack routes all BitTorrent traffic through Gluetun VPN (ProtonVPN,
-#    WireGuard, or OpenVPN).
+# ▶️ This stack routes all BitTorrent traffic through Gluetun VPN
+#    (ProtonVPN, WireGuard, or OpenVPN).
 #
 # ⚙️ Usage:
-#   - Fill your .env file with VPN credentials and media paths.
+#   - Fill in your .env file with VPN credentials and media paths.
 #   - Run: docker-compose up -d
 #   - Access UIs:
 #       • qBittorrent → http://localhost:65534
 ######################################################################
 
 services:
+
   ######################################################################
   # 🛡️ GLUETUN — VPN container
   # Provides a secure VPN tunnel (ProtonVPN, Mullvad, etc.).
   ######################################################################
   gluetun:
-    image: qmcgaw/gluetun:v3
+    image: qmcgaw/gluetun:pr-2586
     container_name: gluetun
     network_mode: bridge
     cap_add:
@@ -25,8 +26,8 @@ services:
     devices:
       - /dev/net/tun:/dev/net/tun
     ports:
-      - ${WEBUI_PORT}:${WEBUI_PORT}/tcp 
-      - 8000:8000                     
+      - ${WEBUI_PORT:-8080}:${WEBUI_PORT:-8080}/tcp   # qBittorrent WebUI (via VPN)
+      - 8000:8000                                     # Gluetun internal API
     env_file:
       - .env
     environment:
@@ -62,31 +63,41 @@ services:
       TZ: ${TZ}
       PUID: ${PUID}
       PGID: ${PGID}
-      WEBUI_PORT: ${WEBUI_PORT} 
-      DOCKER_MODS: ghcr.io/vuetorrent/vuetorrent-lsio-mod:latest # Optional: modern VueTorrent UI
+      WEBUI_PORT: ${WEBUI_PORT:-8080}
+      DOCKER_MODS: ghcr.io/vuetorrent/vuetorrent-lsio-mod:latest  # Optional: modern VueTorrent UI
     volumes:
       - ${CONFIG_PATH}/qbittorrent:/config
       - ${MEDIA_DIR}/downloads:/downloads
     restart: unless-stopped
+    # ✅ Check that the qBittorrent WebUI is reachable
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:${WEBUI_PORT:-8080}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
 
   ######################################################################
-  # 🔀 PORT FORWARDING HELPER — Build local image & update and keep qBittorrent port open
+  # 🔀 PORT FORWARDING HELPER
+  # Keeps qBittorrent’s listening port automatically updated via Gluetun API.
   ######################################################################
   qbittorrent-port-forward-gluetun-server:
     build:
-      context: ./qbittorrent-port-forward-gluetun-server   
-      dockerfile: Dockerfile                               
+      context: ./qbittorrent-port-forward-gluetun-server
+      dockerfile: Dockerfile
     container_name: qbittorrent-port-forward-gluetun-server
     network_mode: "service:gluetun"
     depends_on:
       gluetun:
         condition: service_healthy
+      qbittorrent:
+        condition: service_healthy   # ✅ Wait until qBittorrent is fully ready
     env_file:
       - .env
     environment:
       QBT_USERNAME: ${QBT_USERNAME}
       QBT_PASSWORD: ${QBT_PASSWORD}
-      QBT_ADDR: http://127.0.0.1:${WEBUI_PORT}
+      QBT_ADDR: http://127.0.0.1:${WEBUI_PORT:-8080}
       GTN_ADDR: http://127.0.0.1:8000
       GTN_APIKEY: ${GLUETUN_AUTH_API_KEY}
     restart: unless-stopped

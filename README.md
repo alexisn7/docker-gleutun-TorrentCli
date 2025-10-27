@@ -1,5 +1,5 @@
 
-# Docker Gleutun Transmission
+# Docker Gleutun BitTorrent client
 
 This project provides a ready-to-use Docker Compose stack for running BitTorrent client securely through a VPN using Gluetun. It supports ProtonVPN and other providers, with WireGuard or OpenVPN.
 

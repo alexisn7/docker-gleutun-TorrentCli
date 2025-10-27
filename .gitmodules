@@ -1,0 +1,3 @@
+[submodule "qbittorrent-port-forward-gluetun-server"]
+	path = qbittorrent-port-forward-gluetun-server
+	url = https://github.com/mjmeli/qbittorrent-port-forward-gluetun-server.git
